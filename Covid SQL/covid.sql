@@ -31,5 +31,57 @@
 
 -- ALTER TABLE covid ADD COLUMN id_rep INT PRIMARY KEY UNIQUE AUTO_INCREMENT FIRST;
 
-SELECT AVG(cases)
+-- Show all countries
+SELECT DISTINCT countries_and_territories
 FROM covid;
+
+-- Show population of every country in 2020
+SELECT DISTINCT countries_and_territories, pop_data_2020
+FROM covid
+WHERE year = 2020;
+
+-- Show data only for Austria
+SELECT *
+FROM covid
+WHERE countries_and_territories = 'Austria'
+ORDER BY date_rep;
+
+-- Show tuple with maximum deaths fixed in Austria
+SELECT *
+FROM covid
+WHERE countries_and_territories = 'Austria' AND deaths = (
+	SELECT MAX(deaths)
+    FROM covid
+    WHERE countries_and_territories = 'Austria'
+);
+
+-- Find country which have maximum deaths, show date and population also
+SELECT date_rep, deaths, countries_and_territories, pop_data_2020
+FROM covid
+WHERE deaths = (
+	SELECT MAX(deaths)
+    FROM covid
+);
+
+-- Write a function which returns max deaths of the given country]
+DELIMITER $$
+
+DROP FUNCTION IF EXISTS max_country_deaths;
+CREATE FUNCTION max_country_deaths(country VARCHAR(60))
+RETURNS INT
+DETERMINISTIC
+BEGIN
+	RETURN (
+		SELECT MAX(deaths)
+		FROM covid
+		WHERE countries_and_territories = country
+	);
+END $$
+
+DELIMITER ;
+
+SELECT max_country_deaths('Austria');
+
+-- Write a procedure
+
+-- Write a trigger
