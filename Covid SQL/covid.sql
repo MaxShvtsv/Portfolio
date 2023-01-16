@@ -64,6 +64,7 @@ WHERE deaths = (
 );
 
 -- Write a function which returns max deaths of the given country]
+
 DELIMITER $$
 
 DROP FUNCTION IF EXISTS max_country_deaths;
@@ -80,8 +81,53 @@ END $$
 
 DELIMITER ;
 
-SELECT max_country_deaths('Austria');
+-- SELECT max_country_deaths('Austria');
 
 -- Write a procedure
 
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS get_countries_by_cases;
+CREATE PROCEDURE get_countries_by_cases(min_cases INT)
+BEGIN
+	SELECT DISTINCT countries_and_territories
+    FROM covid
+    WHERE cases > min_cases;
+END $$
+
+DELIMITER ;
+
+CALL get_countries_by_cases(200000);
+
+-- Loops
+
+DROP TABLE IF EXISTS temp_table_countries;
+CREATE TABLE temp_table_countries(
+	country VARCHAR(30)
+);
+
+INSERT INTO temp_table_countries
+SELECT DISTINCT countries_and_territories
+FROM covid
+WHERE LOWER(countries_and_territories) LIKE 's%a' OR
+	  LOWER(countries_and_territories) LIKE 'l%a';
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS loop_max_deaths;
+CREATE PROCEDURE loop_max_deaths()
+BEGIN
+	SET i = 0;
+    DROP TABLE IF EXISTS temp_table_countries;
+	CREATE TABLE temp_table_deaths(
+		deaths INT;
+	);
+	WHILE i < (SELECT COUNT(*) FROM temp_table_countries)
+		BEGIN
+			
+		END;
+END $$
+
+DELIMITER ;
 -- Write a trigger
+
