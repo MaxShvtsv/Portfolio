@@ -1,6 +1,9 @@
 -- CREATE DATABASE covid19
 -- USE covid19
 
+/*
+Create table with Covid-19 cases date in different countries.
+*/
 -- CREATE TABLE Covid(
 -- 	date_rep 					DATE 		NOT NULL,
 --     day 						INTEGER 	NOT NULL,
@@ -15,13 +18,13 @@
 --     continent_exp 				VARCHAR(10) NOT NULL
 -- );
 
--- DROP TABLE covid;
-
+/*
+Enable access to load data from .csv file.
+Reading Covid data from .csv file.
+*/
 -- SHOW GLOBAL VARIABLES LIKE 'local_infile'
 
 -- SET GLOBAL local_infile=true
-
--- TRUNCATE TABLE covid;
 
 -- LOAD DATA LOCAL INFILE 'C:/Users/maksn/Desktop/Development/GitHub/Portfolio/Covid SQL/covid-data-mod.csv'
 -- INTO TABLE covid
@@ -31,6 +34,9 @@
 
 -- ALTER TABLE covid ADD COLUMN id_rep INT PRIMARY KEY UNIQUE AUTO_INCREMENT FIRST;
 
+/*
+Simple selections.
+*/
 -- Show all countries
 -- SELECT DISTINCT countries_and_territories
 -- FROM covid;
@@ -63,8 +69,9 @@
 --     FROM covid
 -- );
 
--- Write a function which returns max deaths of the given country]
-
+/*
+Function which returns max deaths of the given country.
+*/
 DELIMITER $$
 
 DROP FUNCTION IF EXISTS max_country_deaths$$
@@ -83,8 +90,11 @@ DELIMITER ;
 
 -- SELECT max_country_deaths('Austria');
 
--- Write a procedure
 
+/*
+Procedure which selects countries with
+cases more than given minimum cases value.
+*/
 DELIMITER $$
 
 DROP PROCEDURE IF EXISTS get_countries_by_cases$$
@@ -99,8 +109,10 @@ DELIMITER ;
 
 -- CALL get_countries_by_cases(200000);
 
--- Loops
-
+/*
+Procedure with loop which returns maximum cases
+of countries which name like 'S...a', 'L...a'
+*/
 CREATE TABLE temp_table_countries(
 	id_country INT PRIMARY KEY AUTO_INCREMENT,
 	country VARCHAR(30)
@@ -112,42 +124,58 @@ FROM covid
 WHERE LOWER(countries_and_territories) LIKE 's%a' OR
 	  LOWER(countries_and_territories) LIKE 'l%a';
 
-SELECT *
-FROM temp_table_countries;
-
-SELECT max_country_deaths(SELECT country FROM temp_table_countries WHERE id_country = 1)
+-- SELECT *
+-- FROM temp_table_countries;
+/*
+Output:
+1 Latvia
+2 Lithuania
+3 Slovakia
+4 Slovenia
+*/
 
 DELIMITER $$
 
 DROP PROCEDURE IF EXISTS loop_max_deaths$$
 CREATE PROCEDURE loop_max_deaths()
 BEGIN
+	-- Declare iterator and
+    -- temporary var for country in temp_table_countries
     DECLARE i INT DEFAULT 1;
+	DECLARE country_var VARCHAR(30) DEFAULT '';
 
+	-- Create table which store countries and
+    -- max deaths in this country.
     DROP TABLE IF EXISTS temp_table_deaths;
 	CREATE TABLE temp_table_deaths(
+		country VARCHAR(30),
 		deaths INT
 	);
+
+	-- Loop through countries.
 	WHILE i <= (SELECT COUNT(*) FROM temp_table_countries) DO
-		INSERT INTO temp_table_deaths(deaths)
-		SELECT max_country_deaths(
+        SET country_var = (
 			SELECT country
 			FROM temp_table_countries
             WHERE id_country = i
-		)
+		);
+
+		INSERT INTO temp_table_deaths(country, deaths)
+		SELECT country_var, max_country_deaths(country_var);
 
 		SET i = i + 1;
 	END WHILE;
+    
+    -- Output
     SELECT *
     FROM temp_table_deaths;
+
+    DROP TABLE temp_table_deaths;
 END $$
 
 DELIMITER ;
 
 CALL loop_max_deaths();
-
-SELECT *
-FROM covid;
 
 -- Write a trigger
 
