@@ -32,42 +32,42 @@
 -- ALTER TABLE covid ADD COLUMN id_rep INT PRIMARY KEY UNIQUE AUTO_INCREMENT FIRST;
 
 -- Show all countries
-SELECT DISTINCT countries_and_territories
-FROM covid;
+-- SELECT DISTINCT countries_and_territories
+-- FROM covid;
 
 -- Show population of every country in 2020
-SELECT DISTINCT countries_and_territories, pop_data_2020
-FROM covid
-WHERE year = 2020;
+-- SELECT DISTINCT countries_and_territories, pop_data_2020
+-- FROM covid
+-- WHERE year = 2020;
 
 -- Show data only for Austria
-SELECT *
-FROM covid
-WHERE countries_and_territories = 'Austria'
-ORDER BY date_rep;
+-- SELECT *
+-- FROM covid
+-- WHERE countries_and_territories = 'Austria'
+-- ORDER BY date_rep;
 
 -- Show tuple with maximum deaths fixed in Austria
-SELECT *
-FROM covid
-WHERE countries_and_territories = 'Austria' AND deaths = (
-	SELECT MAX(deaths)
-    FROM covid
-    WHERE countries_and_territories = 'Austria'
-);
+-- SELECT *
+-- FROM covid
+-- WHERE countries_and_territories = 'Austria' AND deaths = (
+-- 	SELECT MAX(deaths)
+--     FROM covid
+--     WHERE countries_and_territories = 'Austria'
+-- );
 
 -- Find country which have maximum deaths, show date and population also
-SELECT date_rep, deaths, countries_and_territories, pop_data_2020
-FROM covid
-WHERE deaths = (
-	SELECT MAX(deaths)
-    FROM covid
-);
+-- SELECT date_rep, deaths, countries_and_territories, pop_data_2020
+-- FROM covid
+-- WHERE deaths = (
+-- 	SELECT MAX(deaths)
+--     FROM covid
+-- );
 
 -- Write a function which returns max deaths of the given country]
 
 DELIMITER $$
 
-DROP FUNCTION IF EXISTS max_country_deaths;
+DROP FUNCTION IF EXISTS max_country_deaths$$
 CREATE FUNCTION max_country_deaths(country VARCHAR(60))
 RETURNS INT
 DETERMINISTIC
@@ -77,7 +77,7 @@ BEGIN
 		FROM covid
 		WHERE countries_and_territories = country
 	);
-END $$
+END$$
 
 DELIMITER ;
 
@@ -87,7 +87,7 @@ DELIMITER ;
 
 DELIMITER $$
 
-DROP PROCEDURE IF EXISTS get_countries_by_cases;
+DROP PROCEDURE IF EXISTS get_countries_by_cases$$
 CREATE PROCEDURE get_countries_by_cases(min_cases INT)
 BEGIN
 	SELECT DISTINCT countries_and_territories
@@ -97,37 +97,57 @@ END $$
 
 DELIMITER ;
 
-CALL get_countries_by_cases(200000);
+-- CALL get_countries_by_cases(200000);
 
 -- Loops
 
-DROP TABLE IF EXISTS temp_table_countries;
 CREATE TABLE temp_table_countries(
+	id_country INT PRIMARY KEY AUTO_INCREMENT,
 	country VARCHAR(30)
 );
 
-INSERT INTO temp_table_countries
+INSERT INTO temp_table_countries(country)
 SELECT DISTINCT countries_and_territories
 FROM covid
 WHERE LOWER(countries_and_territories) LIKE 's%a' OR
 	  LOWER(countries_and_territories) LIKE 'l%a';
 
+SELECT *
+FROM temp_table_countries;
+
+SELECT max_country_deaths(SELECT country FROM temp_table_countries WHERE id_country = 1)
+
 DELIMITER $$
 
-DROP PROCEDURE IF EXISTS loop_max_deaths;
+DROP PROCEDURE IF EXISTS loop_max_deaths$$
 CREATE PROCEDURE loop_max_deaths()
 BEGIN
-	SET i = 0;
-    DROP TABLE IF EXISTS temp_table_countries;
+    DECLARE i INT DEFAULT 1;
+
+    DROP TABLE IF EXISTS temp_table_deaths;
 	CREATE TABLE temp_table_deaths(
-		deaths INT;
+		deaths INT
 	);
-	WHILE i < (SELECT COUNT(*) FROM temp_table_countries)
-		BEGIN
-			
-		END;
+	WHILE i <= (SELECT COUNT(*) FROM temp_table_countries) DO
+		INSERT INTO temp_table_deaths(deaths)
+		SELECT max_country_deaths(
+			SELECT country
+			FROM temp_table_countries
+            WHERE id_country = i
+		)
+
+		SET i = i + 1;
+	END WHILE;
+    SELECT *
+    FROM temp_table_deaths;
 END $$
 
 DELIMITER ;
+
+CALL loop_max_deaths();
+
+SELECT *
+FROM covid;
+
 -- Write a trigger
 
