@@ -1,161 +1,176 @@
-import os
-import requests
-from zipfile import ZipFile
-import datetime
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-
 import telebot
+import requests
+import os
+import json
 
-import config_bot
+import config_crypto_bot
 
-plt.switch_backend('agg')
-
-URL_PRICE = 'https://api.binance.com/api/v3/ticker/price'
-URL_HISTORIC_PRICE = 'https://data.binance.vision/?prefix=data/spot/daily/klines/'
-STABLECOIN = 'USDT'
-TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d']
-COLUMNS = ['Open time', 'Open', 'High',
-        'Low', 'Close', 'Volume',
-        'Close time', 'Quote asset volume',
-        'Number of trades', 'Taker buy base asset volume',
-        'Taker buy quote asset volume', 'Ignore']
 CWD = os.path.dirname(os.path.realpath(__file__))
 
-global current_timeframe
-current_timeframe = ''
+SERVER_SLASH = '/'
+LOCALHOST_SLASH = '\\'
+CURRENT_SLASH = SERVER_SLASH
 
-bot = telebot.TeleBot(config_bot.TOKEN)
+URL_COIN = 'https://api.coingecko.com/api/v3/coins/'
+
+CHAT_IDS_WHITELIST = config_crypto_bot.CHAT_IDS_WHITELIST
+
+QUERY_CHAR = '.'
+
+bot = telebot.TeleBot(config_crypto_bot.TOKEN)
 
 print('Start')
 
-def gen_markup_timeframes():
-    markup = telebot.types.InlineKeyboardMarkup()
-    markup.row_width = 3
-    for i in TIMEFRAMES:
-        markup.add(telebot.types.InlineKeyboardButton(i.upper(), callback_data=i))
-    return markup 
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    current_timeframe = call.data
-
-@bot.message_handler(commands=['chart'])
-def show_chart(message):
-    
-    input_data = message.text.split()
-    if len(input_data) != 3:
-        bot.send_message(message.chat.id, 'Error. Wrong input.')
-        return
-
-    command, quote, timeframe = input_data
-    quote = quote.upper()
-    timeframe = timeframe.lower()
-
-    current_month = datetime.datetime.now().month
-    current_day = datetime.datetime.now().day - 1
-    current_year = datetime.datetime.now().year
-
-    current_month = f'0{current_month}' if current_month < 10 else str(current_month)
-    current_day = f'0{current_day}' if current_day < 10 else str(current_day)
-
-    date = f'{current_year}-{current_month}-{current_day}'
-
-    url = f'https://data.binance.vision/data/spot/daily/klines/{quote + STABLECOIN}/{timeframe}/{quote}USDT-{timeframe}-{date}.zip'
-
-    response = requests.get(url)
-    
-    open(CWD + '/data.zip', 'wb').write(response.content)
-
-    with ZipFile(CWD + '/data.zip', 'r') as data_zip:
-        data_zip.extractall(path=CWD)
-
-    csv_path = CWD + f'/{quote + STABLECOIN}-{timeframe}-{date}.csv'
-
-    df = pd.read_csv(csv_path, header=None, names=COLUMNS)
-    df = df[COLUMNS[1:5]]
-
-    divider = 0
-    measure_count = int(timeframe[:-1])
-    measure_time = timeframe[-1]
-    if measure_time == 'm':
-        divider = datetime.timedelta(minutes=measure_count)
-    elif measure_time == 'h':
-        divider = datetime.timedelta(hours=measure_count)
-    elif measure_time == 'd':
-        divider = datetime.timedelta(days=measure_count)
-
-    bars_count = int(datetime.timedelta(days=1) / divider)
-
-    timeformat = "%H:%M"
-    start = datetime.datetime(1, 1, 1, 0, 0)
-
-    timeframe_range = []
-    for i in range(bars_count + 2):
-        timeframe_range.append(start.strftime(timeformat))
-        start += divider
-
-    x_axis_values = np.arange(0, bars_count)
-
-    fig, axs = plt.subplots(figsize=(10, 5))
-
-    xticks_range = np.arange(-1, bars_count + 1)
-
-    axs.set_xticks(xticks_range)
-    axs.set_xticklabels(timeframe_range)
-
-    for i in x_axis_values:
-        open_price = df.iloc[i, 0]
-        low_price = df.iloc[i, 1]
-        high_price = df.iloc[i, 2] 
-        close_price = df.iloc[i, 3]
-        spread = close_price - open_price
-        colour = 'lime' if spread > 0 else 'tomato'
-
-        rect_body = Rectangle((i - 0.4, open_price), 0.8, close_price - open_price,
-                            color=colour)
-
-        axs.add_patch(rect_body)
-        axs.vlines(i, low_price, high_price, colors=colour, linewidth=1)
-
-    for i, val in enumerate(timeframe_range):
-        if val[-2:] != '00':
-            axs.xaxis.get_major_ticks()[i].set_visible(False)
-    axs.xaxis.get_major_ticks()[-1].set_visible(False)
-
-    plt.xticks(rotation=45)
-
-    axs.set_title(f'{quote + STABLECOIN} | {timeframe} | {date}')
-
-    plt.savefig(CWD + '/chart.png')
-    plt.close()
-
-    image = open(CWD + '/chart.png', 'rb')
-
-    bot.send_photo(message.chat.id, image)
-
-    os.remove(CWD + '/data.zip')
-    os.remove(CWD + f'/{quote + STABLECOIN}-{timeframe}-{date}.csv')
-
 @bot.message_handler(content_types=['text'])
 def send_quote(message):
-    if len(message.text.split()) == 1:
-        count = 1
-        quote = message.text
-    else:
-        count = message.text.split()[0]
-        quote = message.text.split()[1]
+    if message.chat.id not in CHAT_IDS_WHITELIST.values():
+        bot.send_message(message.chat.id, 'Access is blocked')
+        return
 
-    query_params = {'symbol' : quote.upper() + STABLECOIN}
-    response = requests.get(URL_PRICE, params=query_params)
-    data = response.json()
-    try:
-        bot.send_message(message.chat.id, f"{count} {quote} = {round(float(count) * float(data['price']), 4)} $")
-    except:
-        bot.send_message(message.chat.id, 'Error. Cryptocurrenc does not exist.')
+    if message.text[0] == QUERY_CHAR:
+        '''
+        Template:
+        {QUERY_CHAR}btc
+        {QUERY_CHAR}0.5 btc
+        '''
+
+        message_splitted = message.text.split()
+
+        if len(message_splitted) > 2:
+            # Theare can be only 1 or 2 words in message
+            return
+
+        count = 1
+        if len(message_splitted) == 1:
+            # Get cryptocurrency symbol
+            symbol = message_splitted[0][1:].lower()
+        else:
+            # Managing cryptocurrency count
+            try:
+                count = float(message_splitted[0][1:])
+                if int(count) == count:
+                    count = int(count)
+            except:
+                return
+            symbol = message_splitted[1].lower()
+
+        data_list = ''
+
+        with open(CWD + f'{CURRENT_SLASH}coin_list.json', encoding='utf-8') as coin_list:
+            # List of coins, their IDs, symbols from CoinGecko
+            data_list = json.load(coin_list)
+
+        token_ids = []
+
+        for i in data_list:
+            # Add all cryptocurrencies with given name without "wormhole" in name.
+            if i['symbol'] == symbol and 'wormhole' not in i['id']:
+                token_ids.append(i['id'])
+
+        if len(token_ids) == 0:
+            return
+
+        text = ''
+
+        for i in token_ids:
+            # Parse tokens' prices
+            params = {
+                'localization': 'false',
+                'tickers': 'false',
+                'market_data': 'true',
+                'community_data': 'false',
+                'developer_data': 'false',
+                'sparkline': 'false'
+            }
+            response_token = requests.get(URL_COIN + f'{i}', params=params)
+            data = response_token.json()
+
+            try:
+                cat = data['categories']
+            except:
+                bot.send_message(message.chat.id, 'Зачекай трохи')
+                return
+
+            cat = data['categories']
+            market_data = data['market_data']
+            current_price = market_data['current_price']
+            current_price_usd = current_price['usd']
+            current_price_uah = current_price['uah']
+            price_change_percentage_24h = market_data['price_change_percentage_24h']
+            price_change_percentage_7d = market_data['price_change_percentage_7d']
+
+            try:
+                price_24h_ago = current_price_usd + -1 * current_price_usd * price_change_percentage_24h / 100
+            except:
+                price_24h_ago = current_price_usd
+                price_change_percentage_24h = '-'
+
+            try:
+                price_7d_ago = current_price_usd + -1 * current_price_usd * price_change_percentage_7d / 100
+            except:
+                price_7d_ago = current_price_usd
+                price_change_percentage_7d = '-'
+
+            percent_round_number = 2
+            price_round_number = 3
+            temp_price = current_price_usd
+
+            while temp_price < 0.1:
+                temp_price *= 10
+                price_round_number += 1
+
+            if current_price_usd >= 1:
+                price_round_number -= 1
+
+            try:
+                multiplied_usd = round(count * current_price_usd, price_round_number)
+            except:
+                multiplied_usd = '-'
+
+            try:
+                multiplied_uah = round(count * current_price_uah, price_round_number)
+            except:
+                multiplied_uah = '-'
+
+            try:
+                price_24h_ago = round(price_24h_ago, price_round_number)
+            except:
+                price_24h_ago = '-'
+
+            try:
+                price_7d_ago = round(price_7d_ago, price_round_number)
+            except:
+                price_7d_ago = '-'
+
+            try:
+                price_change_percentage_24h = round(price_change_percentage_24h, percent_round_number)
+            except:
+                price_change_percentage_24h = '-'
+
+            try:
+                price_change_percentage_7d = round(price_change_percentage_7d, percent_round_number)
+            except:
+                price_change_percentage_7d = '-'
+
+            symbol = symbol.upper()
+            is_multiply = True if count == 1 else False
+            multiply_text = ''
+
+            if not is_multiply:
+                multiply_text = f'{count} {symbol} = `{multiplied_usd:.{price_round_number}f} USD`\n' \
+                                f'{count} {symbol} = `{multiplied_uah:.{price_round_number}f} UAH`\n'
+
+            current_text = f'*{symbol}* ({i})\n' \
+                    f'{symbol} = `{current_price_usd:.{price_round_number}f} USD`\n' \
+                    f'{symbol} = `{current_price_uah:.{price_round_number}f} UAH`\n' \
+                    f'{multiply_text}' \
+                    f'Добу тому: `{price_24h_ago:.{price_round_number}f}$` | `{price_change_percentage_24h}%`\n' \
+                    f'Неділю тому: `{price_7d_ago:.{price_round_number}f}$` | `{price_change_percentage_7d}%`\n' \
+                    f'Характеристика: {", ".join(cat)}\n' \
+
+            text = text + '\n' + current_text
+
+        bot.send_message(message.chat.id, text, parse_mode='Markdown')
 
 bot.polling(none_stop=True)
 
